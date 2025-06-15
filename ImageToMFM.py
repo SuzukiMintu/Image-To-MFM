@@ -87,5 +87,7 @@ def main():
 
     # 完了メッセージの表示
     print(f"MFM art saved success.")
+    # 出力したMFMの文字数を表示
+    print(f"Output MFM character count: {len(mfm_text)}\n")
 
 main()
