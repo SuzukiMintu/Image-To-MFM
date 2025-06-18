@@ -56,7 +56,7 @@ def main():
     print(f"Smooth repeat num: {option["smooth_repeat"]}")
     for i in range(option["smooth_repeat"]):
         print(f"\tSmooth count: {i+1}")
-        color_array = SmoothColor(color_array)
+        color_array = SmoothColorArray(color_array)
         if color_array is None:
             print("Failed to smooth colors.")
             return
@@ -66,6 +66,14 @@ def main():
     if color_array is None:
         print("Failed to reduce colors.")
         return
+
+    # 背景の色も同様に割り算して減色
+    option["background_color"] = QuantizeColor(option["background_color"], option["color_division"])
+
+    # k-meansクラスタリングで減色
+    if option["max_row_colors"] > 0:
+        print(f"Reducing colors per row with max_row_colors: {option['max_row_colors']}")
+        color_array = ReduceColorsPerRow(color_array, option["max_row_colors"])
 
     #===================================================
     # MFMアートの生成と保存

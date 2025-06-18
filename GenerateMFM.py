@@ -19,6 +19,9 @@ use_color_index = -1
 # 前回使用していた色のインデックス
 pre_use_color_index = -1
 
+# 行ごとに使用する色の配列
+mfm_lines_use_colors = []
+
 # mfm出力用の行ごとの配列
 mfm_lines = []
 # 行ごとの1マス目の色

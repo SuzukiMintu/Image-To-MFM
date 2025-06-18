@@ -4,7 +4,8 @@
 # 使い方
 1. Pythonの実行環境を用意する
   - Python 3.12 での動作を確認(他のバージョンでは未確認。古すぎなければ多分動くはず)
-  - 事前に Pillow、numpy をインストールしておくこと
+  - 事前に Pillow、numpy、scikit-learn をインストールしておく
+    - pip install Pillow numpy scikit-learn
 1. option.txtの設定
   - filename
     - 読み込む画像のファイル名を指定
@@ -28,6 +29,11 @@
   - color_division
     - 色を割り算で減色するための値
     - 1.0 以上の小数値を指定。推奨値は 32.0 ～ 64.0
+  - max_row_colors
+    - 1行あたりの最大色数を指定
+    - k-means法で色を分割する際の最大色数
+    - 推奨値は 4
+    - smooth_repeat、color_division との相性が悪いので、ここを設定する場合は smooth_repeat を 0、color_division を 1.0 にすることを推奨
   - color_type
     - 出力するMFMの色の種類を指定
     - 0: 6桁RGB

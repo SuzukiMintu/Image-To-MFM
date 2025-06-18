@@ -20,6 +20,7 @@ def LoadOptionFile(file_path):
     resize_height = -1      # リサイズ後の高さ
     smooth_repeat = 0       # 平均化の繰り返し回数
     color_division = 0      # 色の割り算値
+    max_row_colors = 0      # 各行の最大色数
     color_type = -1         # 色の形式（0: 6桁RGB, 1: 3桁RGB, 2: 4桁RGBA）
     scale_preset = ["0.7"]  # スケールのプリセット
     space_preset = ["　"]   # スペースのプリセット
@@ -61,6 +62,9 @@ def LoadOptionFile(file_path):
 
         elif line.startswith("color_division"):
             color_division = float(line.split("=", 1)[1].strip())
+
+        elif line.startswith("max_row_colors"):
+            max_row_colors = int(line.split("=", 1)[1].strip())
 
         elif line.startswith("color_type"):
             color_type = int(line.split("=", 1)[1].strip())
@@ -107,6 +111,7 @@ def LoadOptionFile(file_path):
     print(f"\tResize Height: {resize_height}")
     print(f"\tSmooth Repeat: {smooth_repeat}")
     print(f"\tColor Division: {color_division}")
+    print(f"\tMax Row Colors: {max_row_colors}")
     print(f"\tColor Type: {color_type}")
     print(f"\tBackground Color: {background_color}")
     print(f"\tUse Scale: {scale}")
@@ -119,6 +124,7 @@ def LoadOptionFile(file_path):
         "resize_height": resize_height,
         "smooth_repeat": smooth_repeat,
         "color_division": color_division,
+        "max_row_colors": max_row_colors,
         "color_type": color_type,
         "background_color": background_color,
         "use_scale": scale,
