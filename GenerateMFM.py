@@ -19,8 +19,8 @@ use_color_index = -1
 # 前回使用していた色のインデックス
 pre_use_color_index = -1
 
-# 行ごとに使用する色の配列
-mfm_lines_use_colors = []
+# 使用するMFM
+use_mfm = "bg"
 
 # mfm出力用の行ごとの配列
 mfm_lines = []
@@ -97,7 +97,7 @@ def CloseCurrentColors(mfm_line, close_index):
 
     # 使用中の色がある場合
     if use_colors:
-        # 使用中の色の数分 "]" を追加してbg.colorを閉じる
+        # 使用中の色の数分 "]" を追加してMFMを閉じる
         mfm_line += "]" * ((len(use_colors) - 1) - close_index)
         # 使用中の色を閉じた分だけ削除
         del use_colors[(close_index + 1):]
@@ -131,7 +131,7 @@ def AddPreviousColors(mfm_line, add_index):
     # 現在の行が空でない場合、閉じた分の色を追加
     if mfm_line:
         for i in range(add_index + 1, mfm_lines_last_index[-1] + 1):
-            mfm_line = f"$[bg.color={use_colors[i]} " + mfm_line
+            mfm_line = f"$[{use_mfm}.color={use_colors[i]} " + mfm_line
     # 1行前の色のインデックスを設定
     mfm_lines_last_index[-1] = add_index
 
@@ -203,7 +203,7 @@ def ColorInUseColors(mfm_line, color):
 
     # インデックスが前回のインデックスより小さい場合
     if use_color_index < pre_use_color_index:
-        # 現在のインデックスまでbg.colorを閉じる
+        # 現在のインデックスまでMFMを閉じる
         mfm_line = CloseCurrentColors(mfm_line, use_color_index)
 
     return mfm_line
@@ -225,7 +225,7 @@ def ColorNotInUseColors(mfm_line, color, alpha):
         mfm_line = CloseCurrentColors(mfm_line, -1)
         use_color_index = -1
 
-    # 透明の色でなければbg.colorを追加
+    # 透明の色でなければMFMを追加
     if alpha != "0":
         AddNewColor(color)
         # 使用できる色の数を超えた場合の処理
@@ -234,7 +234,7 @@ def ColorNotInUseColors(mfm_line, color, alpha):
         if mfm_line is None:
             return None
         # 現在の行に新しい色を追加
-        mfm_line += f"$[bg.color={color} "
+        mfm_line += f"$[{use_mfm}.color={color} "
 
     return mfm_line
 
@@ -266,13 +266,13 @@ def AddBackgroundColor(mfm_line, color_type):
         # mfm_lineがNoneになった場合は再生成なのでreturnする
         if mfm_line is None:
             return None
-        mfm_line += f"$[bg.color={bg_color} "
+        mfm_line += f"$[{use_mfm}.color={bg_color} "
 
     else:
         # 上限を超えない場合は先頭に色を追加
         use_colors = [bg_color] + use_colors
         use_color_index += 1
-        mfm_line = f"$[bg.color={bg_color} " + mfm_line
+        mfm_line = f"$[{use_mfm}.color={bg_color} " + mfm_line
     
     return mfm_line
 
@@ -348,13 +348,15 @@ def GenerateMFMLine(color_array_line, color_type, space_char):
 ### @param scale MFMのスケール文字列
 ### @param space_char 空白として使用する文字
 ### @param max_overlap_bg_color 重ねがけできるbg.colorの上限
+### @param use_mfm_char MFMの使用形式（"bg" または "fg"）
 ### @return 生成されたMFM文字列
-def GenerateMFM(color_array, color_type, background_color, scale, space_char, max_overlap_bg_color):
-    global max_use_colors, default_background, mfm_lines, use_colors, use_color_index, pre_use_color_index, mfm_lines_last_index
+def GenerateMFM(color_array, color_type, background_color, scale, space_char, max_overlap_bg_color, use_mfm_char):
+    global max_use_colors, default_background, use_mfm, mfm_lines, use_colors, use_color_index, pre_use_color_index, mfm_lines_last_index
     print("Generating MFM.")
 
     max_use_colors = max_overlap_bg_color if max_overlap_bg_color > 0 else 19
     default_background = background_color if background_color else (0, 0, 0, 0)
+    use_mfm = use_mfm_char if use_mfm_char else "bg"
 
     i = 0
     for color_line in color_array:

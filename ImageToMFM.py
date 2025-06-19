@@ -86,7 +86,8 @@ def main():
         option["background_color"],
         option["use_scale"],
         option["use_space"],
-        option["max_overlap_bg_color"]
+        option["max_overlap_bg_color"],
+        option["use_mfm"]
     )
     if mfm_text is None:
         print("Failed to generate MFM text.")

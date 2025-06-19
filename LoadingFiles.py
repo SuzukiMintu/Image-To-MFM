@@ -24,6 +24,7 @@ def LoadOptionFile(file_path):
     color_type = -1         # 色の形式（0: 6桁RGB, 1: 3桁RGB, 2: 4桁RGBA）
     scale_preset = ["0.7"]  # スケールのプリセット
     space_preset = ["　"]   # スペースのプリセット
+    use_mfm = "bg"          # 使用するMFM
     background_color = (0, 0, 0, 0) # 背景色 (R, G, B, A)
     max_overlap_bg_color = 19       # 最大重複背景色数
     
@@ -92,6 +93,12 @@ def LoadOptionFile(file_path):
         elif line.startswith("max_overlap_bg_color"):
             max_overlap_bg_color = int(line.split("=", 1)[1].strip())
 
+        elif line.startswith("use_mfm"):
+            use_mfm = line.split("=", 1)[1].strip()
+            if use_mfm not in ["bg", "fg"]:
+                print(f"Invalid use_mfm value: {use_mfm}. Defaulting to 'bg'.")
+                use_mfm = "bg"
+
     # スケールとスペースのインデックスが有効な範囲内か確認
     if use_scale_index < 0 or use_scale_index >= len(scale_preset):
         print(f"Invalid scale index: {use_scale_index}. Using default scale: {scale_preset[0]}")
@@ -117,6 +124,7 @@ def LoadOptionFile(file_path):
     print(f"\tUse Scale: {scale}")
     print(f"\tUse Space: \"{space}\"")
     print(f"\tMax Overlap Background Color: {max_overlap_bg_color}")
+    print(f"\tUse MFM: {use_mfm}")
 
     return {
         "filename": filename,
@@ -129,7 +137,8 @@ def LoadOptionFile(file_path):
         "background_color": background_color,
         "use_scale": scale,
         "use_space": space,
-        "max_overlap_bg_color": max_overlap_bg_color
+        "max_overlap_bg_color": max_overlap_bg_color,
+        "use_mfm": use_mfm
     }
 
 ### @brief pngファイル読み込み関数
