@@ -39,6 +39,29 @@ function decodeMfm(text) {
   assert.equal(stack.length, 0);
   return { rows, maxDepth };
 }
+
+// Check geometry-relevant AST boundaries independently of the encoder: only
+// full-width opaque base spans may cross a newline, including nested spans.
+function assertSafeLayout(text, width) {
+  let row = 0, column = 0;
+  const stack = [], bands = [];
+  for (const token of text.match(/\$\[[^ ]+ |\]|\n|[^\]\n$]+/g)) {
+    if (token.startsWith('$[')) stack.push({ color: /\.color=/.test(token), row, column });
+    else if (token === ']') {
+      const span = stack.pop();
+      assert.ok(span);
+      if (span.color && span.row !== row) {
+        assert.equal(span.column, 0, 'cross-row color starts at row head');
+        assert.equal(column, width, 'cross-row color ends at row end');
+        bands.push(span);
+      }
+    } else if (token === '\n') {
+      assert.equal(column, width); row++; column = 0;
+    } else column += [...token].length;
+  }
+  assert.equal(column, width); assert.equal(stack.length, 0);
+  return bands;
+}
 test('short RGB uses nearest representable value', () => {
   assert.equal(colorCode([31, 31, 31, 255], 'rgb3'), '222');
 });
@@ -64,12 +87,43 @@ test('random images preserve pixels, dimensions and depth through optimization',
       const data = new Uint8ClampedArray(Array.from({ length: 48 }, () => palette[Math.floor(random()*palette.length)]).flat());
       const result = convert(data, 8, 6, { colors: 0, mode, colorType, depth });
       const decoded = decodeMfm(result.text);
+      assertSafeLayout(result.text, result.width);
       assert.ok(result.length <= result.baselineLength);
       assert.ok(decoded.maxDepth <= depth + 1);
       assert.equal(decoded.rows.length, 6);
       assert.ok(decoded.rows.every(row => row.length === 8));
       assert.deepEqual(decoded.rows.flat().flat(), [...result.pixels]);
     }
+  }
+});
+
+test('opaque bands shorten repeated full rows with row-local overlays', () => {
+  const data = new Uint8ClampedArray(Array.from({ length: 64 }, (_, i) =>
+    i % 8 === 3 ? [0,0,255,255] : [255,0,0,255]).flat());
+  for (const mode of ['bg', 'fg']) for (const cell of ['　', ' ', '█', '月']) {
+    const input = { colors: 0, colorType: 'rgb6', mode, cell };
+    const result = convert(data, 8, 8, input);
+    const local = convert(data, 8, 8, { ...input, rowLocal: true });
+    assert.ok(result.length < local.length);
+    assert.ok(assertSafeLayout(result.text, 8).length > 0);
+    assert.equal(assertSafeLayout(local.text, 8).length, 0);
+    assert.deepEqual(decodeMfm(result.text).rows.flat().flat(), [...result.pixels]);
+  }
+});
+
+test('band selection adapts to row groups and excludes transparent rows', () => {
+  const data = new Uint8ClampedArray(Array.from({ length: 48 }, (_, i) => {
+    const y = Math.floor(i / 8);
+    return y === 3 ? [80,60,40,i % 2 ? 128 : 0]
+      : y < 3 ? [255,0,0,255] : [0,255,0,255];
+  }).flat());
+  for (const depth of [1, 2, 19]) for (const mode of ['bg', 'fg']) {
+    const result = convert(data, 8, 6, { colors: 0, depth, mode });
+    const bands = assertSafeLayout(result.text, 8);
+    assert.equal(bands.length, 2);
+    const decoded = decodeMfm(result.text);
+    assert.deepEqual(decoded.rows.flat().flat(), [...result.pixels]);
+    assert.ok(decoded.maxDepth <= depth + 1);
   }
 });
 test('palette reduction preserves transparent pixels and alpha', () => {

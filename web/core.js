@@ -220,14 +220,13 @@ function shortestCode(color) {
   return color.code;
 }
 
-// Beam search over valid color stacks. Each transition preserves pixel color.
-// Semi-transparent/transparent cells are barriers: background layers must not blend.
-// Keep a row-local candidate as a fallback, so optimization never increases length.
-export function generateOptimized(colors, input) {
-  const o = options(input);
-  let states = [{ stack: [], cost: 0, node: null }];
+// A row encoder never leaves an overlay open across a newline. An optional
+// opaque base belongs to a full-width band, and cannot be popped mid-row.
+function encodeLine(runs, o, base = null) {
+  const limit = o.depth - (base === null ? 0 : 1);
+  let states = [{ stack: [], cost: 0, text: '' }];
   const append = (state, chunk, stack = state.stack) => ({
-    stack, cost: state.cost + chunk.length, node: { previous: state.node, chunk },
+    stack, cost: state.cost + chunk.length, text: state.text + chunk,
   });
   const retain = candidates => {
     const unique = new Map();
@@ -237,39 +236,80 @@ export function generateOptimized(colors, input) {
     }
     return [...unique.values()].sort((a, b) => (a.cost + a.stack.length) - (b.cost + b.stack.length)).slice(0, 16);
   };
-  colors.forEach((row, y) => {
-    if (y) states = states.map(state => o.rowLocal ? append(state, ']'.repeat(state.stack.length) + '\n', []) : append(state, '\n'));
+  for (const run of runs) {
+    const cells = o.cell.repeat(run.count), candidates = [];
+    for (const state of states) {
+      if (run.alpha < 255) {
+        // A base would show through a transparent background or blend alpha.
+        if (base !== null) return null;
+        const chunk = ']'.repeat(state.stack.length)
+          + (run.alpha || o.mode === 'fg' ? `$[${o.mode}.color=${run.code} ${cells}]` : cells);
+        candidates.push(append(state, chunk, []));
+        continue;
+      }
+      if (run.code === base) {
+        candidates.push(append(state, ']'.repeat(state.stack.length) + cells, []));
+        continue;
+      }
+      const at = state.stack.indexOf(run.code);
+      if (at >= 0) {
+        candidates.push(append(state, ']'.repeat(state.stack.length - at - 1) + cells, state.stack.slice(0, at + 1)));
+      }
+      for (let keep = 0; keep <= Math.min(state.stack.length, limit - 1); keep++) {
+        if (state.stack.slice(0, keep).includes(run.code)) continue;
+        const chunk = ']'.repeat(state.stack.length - keep) + `$[${o.mode}.color=${run.code} ` + cells;
+        candidates.push(append(state, chunk, [...state.stack.slice(0, keep), run.code]));
+      }
+    }
+    states = retain(candidates);
+    if (!states.length) return null;
+  }
+  const best = states.sort((a, b) => (a.cost + a.stack.length) - (b.cost + b.stack.length))[0];
+  return best.text + ']'.repeat(best.stack.length);
+}
+
+// Compare actual encoded lengths. At most eight frequently occurring run colors
+// are band candidates; this bounds work for images with unrestricted palettes.
+// Every band starts at column zero and closes at a row end. Its overlays are
+// row-local, and rows with any transparency cannot belong to an opaque band.
+export function generateOptimized(colors, input) {
+  const o = options(input), frequencies = new Map();
+  const rows = colors.map(row => {
     const runs = [];
     for (const color of row) {
       const code = shortestCode(color), last = runs.at(-1);
       if (last && last.code === code) last.count++;
-      else runs.push({ code, alpha: color.rgba[3], count: 1 });
-    }
-    for (const run of runs) {
-      const cells = o.cell.repeat(run.count), candidates = [];
-      for (const state of states) {
-        if (run.alpha < 255) {
-          const chunk = ']'.repeat(state.stack.length)
-            + (run.alpha || o.mode === 'fg' ? `$[${o.mode}.color=${run.code} ${cells}]` : cells);
-          candidates.push(append(state, chunk, []));
-          continue;
-        }
-        const at = state.stack.indexOf(run.code);
-        if (at >= 0) {
-          candidates.push(append(state, ']'.repeat(state.stack.length - at - 1) + cells, state.stack.slice(0, at + 1)));
-        }
-        // Try closing different prefixes before opening the next color.
-        for (let keep = 0; keep <= Math.min(state.stack.length, o.depth - 1); keep++) {
-          if (state.stack.slice(0, keep).includes(run.code)) continue;
-          const chunk = ']'.repeat(state.stack.length - keep) + `$[${o.mode}.color=${run.code} ` + cells;
-          candidates.push(append(state, chunk, [...state.stack.slice(0, keep), run.code]));
-        }
+      else {
+        runs.push({ code, alpha: color.rgba[3], count: 1 });
+        if (color.rgba[3] === 255) frequencies.set(code, (frequencies.get(code) || 0) + 1);
       }
-      states = retain(candidates);
     }
+    return runs;
   });
-  const best = states.sort((a, b) => (a.cost + a.stack.length) - (b.cost + b.stack.length))[0];
-  const chunks = [']'.repeat(best.stack.length)];
+  const bases = o.rowLocal ? [] : [...frequencies].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([code]) => code);
+  let states = [{ base: null, cost: 0, node: null }];
+  rows.forEach((runs, y) => {
+    const candidates = [null, ...(runs.every(run => run.alpha === 255) ? bases : [])];
+    const next = [];
+    for (const base of candidates) {
+      const line = encodeLine(runs, o, base);
+      if (line === null) continue;
+      let best = null;
+      for (const previous of states) {
+        // Close a previous band BEFORE the newline, and open the next AFTER it.
+        const changed = previous.base !== base;
+        const chunk = (changed && previous.base !== null ? ']' : '')
+          + (y ? '\n' : '')
+          + (changed && base !== null ? `$[${o.mode}.color=${base} ` : '') + line;
+        const cost = previous.cost + chunk.length;
+        if (!best || cost < best.cost) best = { base, cost, node: { previous: previous.node, chunk } };
+      }
+      next.push(best);
+    }
+    states = next;
+  });
+  const best = states.sort((a, b) => (a.cost + (a.base !== null ? 1 : 0)) - (b.cost + (b.base !== null ? 1 : 0)))[0];
+  const chunks = [best.base !== null ? ']' : ''];
   for (let node = best.node; node; node = node.previous) chunks.push(node.chunk);
   return `$[scale.y=${o.scale} ${chunks.reverse().join('')}]`;
 }

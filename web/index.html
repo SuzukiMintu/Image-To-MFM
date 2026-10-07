@@ -59,7 +59,7 @@
             <label>1ピクセルに使う文字<select name="cell"><option value="　">全角スペース</option><option value=" ">半角スペース</option><option value="█">█（ブロック）</option><option value="月">月</option></select></label>
             <label>色を付ける対象<select name="mode"><option value="bg">bg — 背景</option><option value="fg">fg — 文字（ブロックなどを選択）</option></select></label>
           </details>
-          <div class="optimization"><label class="check"><input name="optimize" type="checkbox" checked>色味を変えずにMFMを短くする</label><p class="help">色指定を再利用し、同じ色を短いコードで表します。減色による画質の変化とは別の設定です。</p></div>
+          <div class="optimization"><label class="check"><input name="optimize" type="checkbox" checked>色味を変えずにMFMを短くする</label><p class="help">行内の色指定や、不透明な行全体で共通の色を再利用します。同じ色を短いコードで表す処理も行います。減色による画質の変化とは別の設定です。</p></div>
           <p class="help">文字数上限を指定した場合は、最適化を常に有効にして探索します。</p>
           </fieldset>
           <button id="convert" class="primary" type="submit" disabled>MFMに変換 <span>→</span></button>
