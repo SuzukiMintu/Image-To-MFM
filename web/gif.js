@@ -8,7 +8,7 @@ export function decodeGif(buffer) {
   const signature = String.fromCharCode(...take(6));
   if (!['GIF87a', 'GIF89a'].includes(signature)) throw new Error('GIF形式の画像ではありません。');
   const width = word(), height = word(), flags = byte(), bgIndex = byte(); byte();
-  if (!width || !height || width * height * 4 > 128 * 1024 * 1024) throw new Error('GIFの展開サイズが大きすぎます。');
+  if (!width || !height) throw new Error('GIFのサイズが不正です。');
   const palette = count => take(count * 3);
   const global = flags & 128 ? palette(1 << ((flags & 7) + 1)) : null;
   const blocks = () => { const parts = []; let total = 0, n; while ((n = byte())) { const part = take(n); parts.push(part); total += n; } const result = new Uint8Array(total); let offset = 0; for (const part of parts) { result.set(part, offset); offset += part.length; } return result; };
@@ -58,7 +58,6 @@ export function decodeGif(buffer) {
       if (color * 3 + 2 >= colors.length) throw new Error('GIFの色番号が不正です。');
       canvas.set([colors[color * 3], colors[color * 3 + 1], colors[color * 3 + 2], 255], ((top + rows[y]) * width + left + x) * 4);
     }
-    if ((frames.length + 1) * canvas.byteLength > 256 * 1024 * 1024 || frames.length >= 256) throw new Error('GIFのコマ数または展開後の容量が大きすぎます。');
     frames.push({ pixels: canvas.slice(), delay: gce.delay, rawDelay: gce.rawDelay });
     previous = { left, top, width: w, height: h, disposal: gce.disposal, transparent: gce.transparent, saved };
     gce = { delay: 100, rawDelay: 0, disposal: 0, transparent: -1 };

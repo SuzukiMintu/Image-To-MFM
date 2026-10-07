@@ -3,7 +3,7 @@ export const defaults = Object.freeze({
   width: 30, height: 0, smooth: 0, division: 1, colors: 5,
   similar: 0, colorType: 'rgba4', background: '#ffffff', backgroundAlpha: 0,
   scale: 0.7, cell: '　', depth: 19, mode: 'bg', palette: 'row', optimize: true,
-  targetLength: 0, allowResize: true,
+  targetLength: 0, allowResize: true, rowLocal: false,
 });
 
 export function options(input = {}) {
@@ -11,7 +11,7 @@ export function options(input = {}) {
   for (const [key, min, max, integer] of [
     ['width', 0, Number.MAX_SAFE_INTEGER, true], ['height', 0, Number.MAX_SAFE_INTEGER, true], ['smooth', 0, 5, true],
     ['targetLength', 0, Number.MAX_SAFE_INTEGER, true],
-    ['division', 1, 255, false], ['colors', 0, 64, true], ['similar', 0, 255, true],
+    ['division', 1, 255, false], ['colors', 0, Number.MAX_SAFE_INTEGER, true], ['similar', 0, 255, true],
     ['backgroundAlpha', 0, 255, true], ['scale', 0.01, 5, false], ['depth', 1, 19, true],
   ]) {
     const value = Number(o[key]);
@@ -22,7 +22,7 @@ export function options(input = {}) {
   }
   if (!['rgb6', 'rgb3', 'rgba4'].includes(o.colorType) || !['bg', 'fg'].includes(o.mode)
     || !['row', 'global'].includes(o.palette) || !['　', ' ', '█', '月'].includes(o.cell)
-    || !/^#[\da-f]{6}$/i.test(o.background) || typeof o.optimize !== 'boolean' || typeof o.allowResize !== 'boolean') {
+    || !/^#[\da-f]{6}$/i.test(o.background) || typeof o.optimize !== 'boolean' || typeof o.allowResize !== 'boolean' || typeof o.rowLocal !== 'boolean') {
     throw new Error('設定が正しくありません。');
   }
   return o;
@@ -55,10 +55,13 @@ export function reducePalette(pixels, count) {
   if (unique.length <= count) return pixels.map(p => [...p]);
   // Deterministic farthest-point seeding, followed by weighted K-means.
   const centers = [unique[0].slice(0, 3)];
+  const nearestDistances = unique.map(() => Infinity);
   while (centers.length < count) {
     let best = unique[0], bestDistance = -1;
-    for (const p of unique) {
-      const d = Math.min(...centers.map(c => distance(p, c))) * p[3] / 255;
+    for (let i = 0; i < unique.length; i++) {
+      const p = unique[i];
+      nearestDistances[i] = Math.min(nearestDistances[i], distance(p, centers.at(-1)));
+      const d = nearestDistances[i] * p[3] / 255;
       if (d > bestDistance) [best, bestDistance] = [p, d];
     }
     centers.push(best.slice(0, 3));
@@ -175,7 +178,7 @@ export function generateBaseline(colors, input) {
     for (const { code, rgba } of row) {
       if (rgba[3] < 255) {
         text += ']'.repeat(stack.length); stack = [];
-        text += rgba[3] ? `$[${o.mode}.color=${code} ${o.cell}]` : o.cell;
+        text += rgba[3] || o.mode === 'fg' ? `$[${o.mode}.color=${code} ${o.cell}]` : o.cell;
         continue;
       }
       const at = stack.indexOf(code);
@@ -207,7 +210,7 @@ export function encodeRows(rows, width, height, input) {
   for (const row of colors) for (const color of row) { pixels.set(color.rgba, index); index += 4; }
   // Every supported cell is one BMP character; syntax is ASCII.
   return { text, baselineLength: baseline.length, length: text.length,
-    width, height, pixels };
+    width, height, pixels, ...(o.rowLocal ? { baselineText: baseline } : {}) };
 }
 
 function shortestCode(color) {
@@ -235,7 +238,7 @@ export function generateOptimized(colors, input) {
     return [...unique.values()].sort((a, b) => (a.cost + a.stack.length) - (b.cost + b.stack.length)).slice(0, 16);
   };
   colors.forEach((row, y) => {
-    if (y) states = states.map(state => append(state, '\n'));
+    if (y) states = states.map(state => o.rowLocal ? append(state, ']'.repeat(state.stack.length) + '\n', []) : append(state, '\n'));
     const runs = [];
     for (const color of row) {
       const code = shortestCode(color), last = runs.at(-1);
@@ -247,7 +250,7 @@ export function generateOptimized(colors, input) {
       for (const state of states) {
         if (run.alpha < 255) {
           const chunk = ']'.repeat(state.stack.length)
-            + (run.alpha ? `$[${o.mode}.color=${run.code} ${cells}]` : cells);
+            + (run.alpha || o.mode === 'fg' ? `$[${o.mode}.color=${run.code} ${cells}]` : cells);
           candidates.push(append(state, chunk, []));
           continue;
         }

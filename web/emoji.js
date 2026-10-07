@@ -1,4 +1,3 @@
-const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
 
 // Examples are fetched from the server on demand; no example image is bundled.
 export const emojiExample = Object.freeze({
@@ -58,7 +57,7 @@ export async function fetchEmoji(server, emoji, { signal, fetcher = fetch, timeo
     if (imageUrl.protocol !== 'https:' || imageUrl.username || imageUrl.password) throw new Error('絵文字画像のURLが正しくありません。');
     const image = await fetcher(imageUrl.href, common);
     if (!image.ok) throw new Error('絵文字画像を取得できません。');
-    const blob = await limitedBlob(image, MAX_IMAGE_BYTES, controller);
+    const blob = await limitedBlob(image, Infinity, controller);
     if (!blob.size) throw new Error('絵文字画像が空です。');
     return { blob, name, server: new URL(endpoint).host };
   } finally {

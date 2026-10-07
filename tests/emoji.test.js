@@ -29,9 +29,13 @@ test('API errors, missing URLs, unsafe URLs, CORS errors and image errors fail c
     async () => Response.json({ url: 'javascript:alert(1)' }),
     async () => { throw new TypeError('Failed to fetch'); },
     async url => url.endsWith('/api/emoji') ? Response.json({ url: 'https://cdn.example.com/x' }) : new Response('', { status: 403 }),
-    async url => url.endsWith('/api/emoji') ? Response.json({ url: 'https://cdn.example.com/x' }) : new Response('x', { headers: { 'Content-Length': String(31*1024*1024) } }),
   ];
   for (const fetcher of cases) await assert.rejects(fetchEmoji('https://example.com', 'aichan', { fetcher }));
+});
+
+test('emoji image responses are not rejected by the former 30 MB header limit', async () => {
+  const fetcher = async url => url.endsWith('/api/emoji') ? Response.json({ url: 'https://cdn.example.com/x' }) : new Response('x', { headers: { 'Content-Length': String(31 * 1024 * 1024) } });
+  assert.equal((await fetchEmoji('https://example.com', 'aichan', { fetcher })).blob.size, 1);
 });
 test('timeout and caller cancellation abort requests', async () => {
   const fetcher = (url, { signal }) => new Promise((resolve, reject) => {

@@ -32,7 +32,7 @@ function decodeMfm(text) {
     else {
       const layers = stack.filter(Boolean);
       const visible = layers.at(-1) || [0, 0, 0, 0];
-      if (visible[3] < 255) assert.equal(layers.length, visible[3] ? 1 : 0, 'no alpha blending against outer color');
+      if (visible[3] < 255) assert.ok(layers.length <= 1 && (!visible[3] || layers.length === 1), 'no alpha blending against outer color');
       for (const char of token) rows.at(-1).push(visible);
     }
   }

@@ -1,6 +1,8 @@
 import { renderSwitchMfm } from './switch-preview.js';
 import { switchFrames, textFrames } from './switch-mfm.js';
 import { fetchEmoji } from './emoji.js';
+import { inspectGif, conversionWarnings } from './load-warning.js';
+import { options } from './core.js';
 const $ = id => document.getElementById(id);
 let sources = [], worker = null, generation = 0, controller = null, output = null, downloadUrl = null, framesUrl = null, originalUrl = null;
 
@@ -29,7 +31,6 @@ function sourceNames() {
   }
 }
 async function decode(blob, name) {
-  if (blob.size > 30 * 1024 * 1024) throw new Error('画像は1枚30MB以下にしてください。');
   const bytes = await blob.arrayBuffer();
   if (String.fromCharCode(...new Uint8Array(bytes, 0, Math.min(6, bytes.byteLength))).startsWith('GIF8')) return { bytes, name };
   return { bitmap: await createImageBitmap(blob), name };
@@ -86,6 +87,9 @@ async function generate() {
     if (!sources.length || sources.length > 8 || sources.length === 1 && !sources[0].bytes) throw new Error('画像を2〜8枚、またはGIFを1枚読み込んでください。');
     for (const name of ['width', 'height', 'colors']) if (!$(name).reportValidity()) return;
     const settings = { period, width: Number($('width').value), height: Number($('height').value), colors: Number($('colors').value), gifTiming: $('gif-timing').checked };
+    const info = sources[0].bytes ? inspectGif(sources[0].bytes) : sources[0].bitmap;
+    const reasons = conversionWarnings(info, options({ width: settings.width, height: settings.height, colors: settings.colors }), sources[0].bytes ? info : null, sources[0].bytes?.byteLength || 0);
+    if (reasons.length && !window.confirm(reasons.join('\n\n'))) { status('生成を見送りました。'); return; }
     $('generate').disabled = true; $('cancel').hidden = false; status('画像を変換しています…');
     const copies = [];
     try {

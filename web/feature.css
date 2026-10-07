@@ -1,0 +1,15 @@
+#load-warning {
+  width: min(520px, calc(100% - 32px));
+  max-height: calc(100vh - 48px);
+  border: 1px solid #dfe6dc;
+  border-radius: 16px;
+  padding: 24px;
+  color: #24352d;
+  box-shadow: 0 12px 60px #24352d33;
+}
+#load-warning::backdrop { background: #24352d77; }
+#load-warning h2 { margin: 0 0 16px; font-size: 18px; }
+#load-warning-reasons { white-space: pre-line; font-size: 14px; line-height: 1.7; }
+#load-warning .actions { justify-content: flex-end; }
+.mfm-preview.animated { overflow: auto; max-height: 550px; }
+.gif-render { white-space: pre; }

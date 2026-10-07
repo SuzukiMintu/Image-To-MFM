@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#f5f7f4">
   <title>Image to MFM — 画像を、ことばのピクセルに。</title>
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./feature.css">
   <script type="module" src="./app.js"></script>
 </head>
 <body>
@@ -35,20 +36,19 @@
           <label>変換方法<select id="conversion-mode"><option value="static">静止画として変換</option><option id="gif-mode-option" value="gif" disabled>GIFの全コマを変換</option></select></label>
           <label>縦方向のスケール<input name="scale" type="number" min="0.01" max="5" step="0.001" value="0.7" required></label>
           <fieldset id="gif-settings" hidden disabled>
-            <div class="pair"><label>1コマの横幅 <span>px</span><input id="gif-width" type="number" min="1" max="24" value="16" required></label><label>縦幅 <span>px</span><input id="gif-height" type="number" min="1" max="24" value="16" required></label></div>
-            <label>1コマの色数<input id="gif-colors" type="number" min="1" max="32" value="8" required></label>
             <label class="check"><input id="gif-timing" type="checkbox" checked>元のGIFの表示時間を使う</label>
             <label>1周の時間 <span>秒</span><input id="gif-period" type="number" min="0.02" max="60" step="0.01" value="1" disabled required></label>
             <p class="help">元の表示時間を使わない場合は、指定した1周の時間で全コマを均等に表示します。</p>
-            <p class="help">全フレームを白背景・3桁RGBで変換し、既存MFMだけで切り替えます。各辺24pxまでの小さいコマ用です。静止画用の文字数上限・最適化設定は適用しません。</p>
+            <p class="help">下の設定を全コマに適用します。文字数の上限は切り替え部分を含むGIF全体のMFMに対する指定です。透過部分に前のコマが残らないよう、全コマを切り替えます。</p>
+            <p class="help">GIFでは最適化の色指定を行内に収め、切り替え位置を保ちます。入れ子上限はMisskeyの20段に収まるよう、切り替え部分を考慮して調整します。</p>
           </fieldset>
-          <fieldset id="static-settings">
+          <fieldset id="conversion-settings">
           <div class="pair"><label>横幅 <span>px</span><input name="width" type="number" min="0" value="30" required></label><label>縦幅 <span>px</span><input name="height" type="number" min="0" value="0" required></label></div>
           <p class="help">片方を0にすると縦横比を維持。両方0で元のサイズを使います。大きい画像は処理に時間がかかる場合があります。</p>
           <label>文字数の上限<input name="targetLength" type="number" min="0" value="0" required></label>
           <p class="help">0で自動調整しません。上限を指定すると、まず同じサイズで減色・最適化を試します。</p>
           <label class="check"><input name="allowResize" type="checkbox" checked>収まらない場合は画像を小さくする</label>
-          <label>1行の色数<input name="colors" type="number" min="0" max="64" value="5" required></label><p class="help">少ないほどシンプルな色に。0で減色しません。</p>
+          <label>色数<input name="colors" type="number" min="0" value="5" required></label><p class="help">少ないほどシンプルな色に。0で減色しません。詳細設定で行ごと／画像全体を選べます。</p>
           <label>色の形式<select name="colorType"><option value="rgba4">4桁RGBA — 透明度を保持</option><option value="rgb6">6桁RGB — 色味を優先</option><option value="rgb3">3桁RGB — 短さを優先</option></select></label>
           <div class="pair"><label>背景色<input name="background" type="color" value="#ffffff"></label><label>背景の不透明度<input name="backgroundAlpha" type="number" min="0" max="255" value="0" required></label></div><p class="help">不透明度: 0〜255。RGB形式では背景は不透明になります。</p>
           <details><summary>詳細設定</summary>
@@ -84,6 +84,7 @@
     </div>
     <p id="status" class="status" role="status" aria-live="polite">画像を選ぶところから始めましょう。</p>
   </main>
+  <dialog id="load-warning" aria-labelledby="load-warning-title"><form method="dialog"><h2 id="load-warning-title">生成前の確認</h2><p id="load-warning-reasons"></p><div class="actions"><button class="secondary" value="cancel">設定に戻る</button><button class="primary" value="generate">生成する</button></div></form></dialog>
   <footer>Image to MFM <span>小さなピクセルで、もっと自由に。</span></footer>
 </body>
 </html>

@@ -5,7 +5,7 @@ export function minimumLength(width, height, input) {
   return width * height * o.cell.length + height - 1 + `$[scale.y=${o.scale} ]`.length;
 }
 
-function colorCounts(start) {
+export function colorCounts(start) {
   const values = [];
   let count = start || 64;
   while (count > 1) {
@@ -16,7 +16,7 @@ function colorCounts(start) {
 }
 
 // Premultiplied color error: invisible RGB must not dominate quality selection.
-function imageError(reference, pixels) {
+export function imageError(reference, pixels) {
   let sum = 0, index = 0;
   for (const row of reference) for (const p of row) {
     const a = p[3] / 255, b = pixels[index + 3] / 255;
@@ -29,7 +29,7 @@ function imageError(reference, pixels) {
   return sum / (index / 4);
 }
 
-function smallerSize(initial, current) {
+export function smallerSize(initial, current) {
   // Always derive the ratio from the requested size, never from the prior image.
   const scale = Math.min(current.width / initial.width, current.height / initial.height) * 0.9;
   let width = Math.max(1, Math.round(initial.width * scale));

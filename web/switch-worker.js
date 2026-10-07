@@ -45,7 +45,7 @@ self.onmessage = async ({ data }) => {
         decoded.frames.forEach((frame, i) => inputs.push({ ...frame, width: decoded.width, height: decoded.height, name: `${source.name} #${i + 1}` }));
       } else inputs.push(source);
     }
-    if (inputs.length < 2 || inputs.length > 256) throw new Error('再生するコマは2〜256個にしてください。');
+    if (inputs.length < 2) throw new Error('再生するコマは2個以上にしてください。');
     const frames = [];
     for (let i = 0; i < inputs.length; i++) {
       const source = inputs[i]; let image = source.bitmap;

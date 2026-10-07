@@ -1,15 +1,16 @@
 import { options } from './core.js';
 import { fetchEmoji, emojiExample } from './emoji.js';
 import { renderSwitchMfm } from './switch-preview.js';
+import { inspectGif, conversionWarnings } from './load-warning.js';
 
 const $ = id => document.getElementById(id);
 const form = $('settings');
 let source = null, sourceName = 'image', result = null, worker = null, job = 0, downloadUrl = null;
 let gifBytes = null, originalGifUrl = null, gifFramesUrl = null, gifOutput = null;
+let gifInfo = null, sourceFileBytes = 0;
 const isGifMode = () => $('conversion-mode').value === 'gif';
 function updateMode() {
   const animated = isGifMode();
-  $('static-settings').hidden = animated; $('static-settings').disabled = animated;
   $('gif-settings').hidden = !animated; $('gif-settings').disabled = !animated;
   $('gif-period').disabled = $('gif-timing').checked;
   $('processed-title').textContent = animated ? '変換後の色（先頭コマ）' : '変換後の色';
@@ -44,16 +45,18 @@ function clearResult() {
 }
 
 async function decodeBlob(blob) {
-  if (blob.size > 30 * 1024 * 1024) throw new Error('画像は30MB以下にしてください。');
   const bytes = await blob.arrayBuffer();
   const signature = String.fromCharCode(...new Uint8Array(bytes, 0, Math.min(6, bytes.byteLength)));
   const bitmap = await createImageBitmap(blob);
-  return { bitmap, bytes: ['GIF87a', 'GIF89a'].includes(signature) ? bytes : null };
+  const animated = ['GIF87a', 'GIF89a'].includes(signature);
+  try { return { bitmap, bytes: animated ? bytes : null, info: animated ? inspectGif(bytes) : null }; }
+  catch (error) { bitmap.close(); throw error; }
 }
 let loadId = 0, emojiController = null;
 function clearSource() {
   if (source) source.close(); source = null;
   gifBytes = null;
+  gifInfo = null; sourceFileBytes = 0;
   if (originalGifUrl) URL.revokeObjectURL(originalGifUrl); originalGifUrl = null;
   $('original-gif').removeAttribute('src'); $('original-gif').hidden = true;
   $('conversion-mode').value = 'static'; $('gif-mode-option').disabled = true; updateMode();
@@ -71,11 +74,12 @@ async function selectImage(blob, name) {
   clearSource();
   status('画像を読み込んでいます…');
   try {
-    const { bitmap, bytes } = await decodeBlob(blob);
+    const { bitmap, bytes, info } = await decodeBlob(blob);
     if (id !== loadId) { bitmap.close(); return false; }
     if (source) source.close();
     source = bitmap; sourceName = name.replace(/\.(?:png|jpe?g|webp|gif|avif|bmp|svg)$/i, '') || 'image';
     gifBytes = bytes;
+    gifInfo = info; sourceFileBytes = blob.size;
     if (bytes) {
       originalGifUrl = URL.createObjectURL(blob); $('original-gif').src = originalGifUrl;
       $('gif-mode-option').disabled = false; $('conversion-mode').value = 'gif';
@@ -147,14 +151,23 @@ $('dropzone').addEventListener('drop', e => { const file = e.dataTransfer.files[
 form.addEventListener('input', () => { clearResult(); if (source) status('設定が変更されました。もう一度変換してください。'); });
 $('conversion-mode').addEventListener('change', () => { updateMode(); clearResult(); });
 $('gif-timing').addEventListener('change', updateMode);
+function confirmGeneration(reasons) {
+  if (!reasons.length) return Promise.resolve(true);
+  const dialog = $('load-warning'); dialog.returnValue = 'cancel';
+  $('load-warning-reasons').textContent = reasons.join('\n\n');
+  return new Promise(resolve => { dialog.addEventListener('close', () => resolve(dialog.returnValue === 'generate'), { once: true }); dialog.showModal(); });
+}
 form.addEventListener('submit', async e => {
   e.preventDefault();
   if (!source) return;
   clearResult();
   const id = ++job;
   try {
-    if (isGifMode()) { await convertGif(id); return; }
     const o = readOptions();
+    const confirmed = await confirmGeneration(conversionWarnings(source, o, isGifMode() ? gifInfo : null, sourceFileBytes));
+    if (id !== job) return;
+    if (!confirmed) { status('生成を見送りました。設定を調整して再度変換できます。'); return; }
+    if (isGifMode()) { await convertGif(id, o); return; }
     worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
     $('convert').disabled = true; $('convert').textContent = '変換中…'; $('cancel').hidden = false;
     status('MFMに変換しています…');
@@ -212,12 +225,14 @@ form.addEventListener('submit', async e => {
 });
 $('cancel').addEventListener('click', () => { clearResult(); status('処理を中止しました。設定を変更して再変換できます。'); });
 
-async function convertGif(id) {
+async function convertGif(id, o) {
   if (!gifBytes) throw new Error('GIFを読み込んでから全コマ変換を選んでください。');
-  const settings = { width: Number($('gif-width').value), height: Number($('gif-height').value),
-    colors: Number($('gif-colors').value), period: Number($('gif-period').value), gifTiming: $('gif-timing').checked,
-    scale: Number(form.elements.scale.value) };
-  worker = new Worker(new URL('./switch-worker.js', import.meta.url), { type: 'module' });
+  const measure = document.createElement('div'); measure.className = 'gif-render';
+  measure.style.cssText = 'position:absolute;visibility:hidden;width:max-content;max-width:none;white-space:pre';
+  const cell = document.createElement('span'); cell.textContent = o.cell; measure.append(cell); document.body.append(measure);
+  const cellWidthEm = Math.ceil(cell.getBoundingClientRect().width * 64) / 64 / 16; measure.remove();
+  const settings = { period: Number($('gif-period').value), gifTiming: $('gif-timing').checked, cellWidthEm };
+  worker = new Worker(new URL('./gif-worker.js', import.meta.url), { type: 'module' });
   $('convert').disabled = true; $('convert').textContent = '全コマを変換中…'; $('cancel').hidden = false;
   status('GIFの全フレームをMFMに変換しています…');
   worker.onmessage = ({ data }) => {
@@ -225,14 +240,13 @@ async function convertGif(id) {
     if (data.progress) { status(data.progress); return; }
     worker.terminate(); worker = null;
     $('convert').disabled = false; $('convert').textContent = 'MFMに変換 →'; $('cancel').hidden = true;
-    if (data.error) { status(data.error === '再生するコマは2〜256個にしてください。'
-      ? 'GIFの全コマ変換には2コマ以上が必要です。「静止画として変換」も利用できます。' : data.error, 'error'); return; }
+    if (data.error) { status(data.error, 'error'); return; }
     try { showGif(data); }
     catch (error) { clearResult(); status(error.message, 'error'); }
   };
   worker.onerror = () => { if (id === job) { clearResult(); status('GIFを変換できませんでした。', 'error'); } };
   const bytes = gifBytes.slice(0);
-  worker.postMessage({ id, settings, frames: [{ bytes, name: sourceName }] }, [bytes]);
+  worker.postMessage({ id, settings, options: o, bytes, name: sourceName }, [bytes]);
 }
 
 function replayGif() {
@@ -243,6 +257,7 @@ function replayGif() {
     $('gif-restart').hidden = true; return;
   }
   const view = document.createElement('div'); view.className = 'gif-render';
+  view.style.width = `${gifOutput.widthEm * 16}px`; view.style.maxWidth = 'none';
   view.style.height = `${gifOutput.heightEm * 16 + 1}px`; view.append(renderSwitchMfm(gifOutput.text));
   root.replaceChildren(view);
   const box = view.firstElementChild?.firstElementChild?.getBoundingClientRect();
@@ -256,21 +271,27 @@ function showGif(data) {
   $('count').innerHTML = `${result.length.toLocaleString()} <small>文字</small>`;
   $('dimensions').textContent = `${data.width} × ${data.height} px · ${result.count}コマ`;
   $('savings').textContent = `全${result.count}コマを変換しました。入れ子${result.depth}段。`;
+  if (result.usedOptions) {
+    const fit = result.fit;
+    $('savings').textContent += ` 最適化前 ${result.baselineLength.toLocaleString()}文字 → ${result.length.toLocaleString()}文字。`;
+    $('fit-summary').textContent = `${fit.targetLength ? `${fit.met ? '上限以内に収まりました' : '上限以内に収まりませんでした'}：${result.length.toLocaleString()} / ${fit.targetLength.toLocaleString()}文字。` : ''}`
+      + `${fit.requestedWidth} × ${fit.requestedHeight} → ${data.width} × ${data.height} px。採用した減色：${result.usedOptions.colors || 'なし'}${result.usedOptions.colors ? '色' : ''}・${result.usedOptions.palette === 'row' ? '行ごと' : '画像全体'}。色指定の入れ子上限：${result.usedOptions.depth}段（切り替え部分を除く）。`;
+  }
   $('gif-summary').textContent = `${result.count}コマ・1周${Number(result.period.toFixed(6))}秒。切り替え時には短いワイプがあります。投稿上では下にコマ数分の余白が残ります。フォントや行高によって位置がずれる場合があります。`;
-  const first = data.frames[0], preview = $('processed'); preview.width = first.width; preview.height = first.height;
-  preview.getContext('2d').putImageData(new ImageData(first.pixels, first.width, first.height), 0, 0);
+  const first = data.frames[0], preview = $('processed'); preview.width = first.previewWidth || first.width; preview.height = first.previewHeight || first.height;
+  preview.getContext('2d').putImageData(new ImageData(first.pixels, preview.width, preview.height), 0, 0);
   preview.hidden = false; $('empty-processed').hidden = true;
   $('gif-frame-details').hidden = false; $('gif-frames').replaceChildren();
   data.frames.forEach((frame, index) => {
     const item = document.createElement('figure'), image = document.createElement('canvas'), caption = document.createElement('figcaption');
-    image.width = frame.width; image.height = frame.height;
-    image.getContext('2d').putImageData(new ImageData(frame.pixels, frame.width, frame.height), 0, 0);
+    image.width = frame.previewWidth || frame.width; image.height = frame.previewHeight || frame.height;
+    image.getContext('2d').putImageData(new ImageData(frame.pixels, image.width, image.height), 0, 0);
     caption.textContent = `${index + 1}コマ目 · ${Number((result.durations[index] * 1000).toFixed(3))}ms · ${frame.length.toLocaleString()}文字`;
     const details = document.createElement('details'), summary = document.createElement('summary'), text = document.createElement('textarea');
     summary.textContent = 'このコマのMFM'; text.value = frame.text; text.readOnly = true; text.setAttribute('aria-label', `${index + 1}コマ目のMFM`);
     details.append(summary, text); item.append(image, caption, details); $('gif-frames').append(item);
   });
-  const metadata = { gif: data.gif, period: result.period, layout: result.layout, combinedMfm: result.text, depth: result.depth,
+  const metadata = { gif: data.gif, period: result.period, layout: result.layout, combinedMfm: result.text, depth: result.depth, fit: result.fit, options: result.usedOptions,
     frames: data.frames.map((frame, index) => ({ name: frame.name, width: frame.width, height: frame.height,
       delayMs: result.durations[index] * 1000, text: frame.text, length: frame.length })) };
   gifFramesUrl = URL.createObjectURL(new Blob([JSON.stringify(metadata, null, 2)], { type: 'application/json' }));
@@ -280,7 +301,8 @@ function showGif(data) {
   downloadUrl = URL.createObjectURL(new Blob([result.text], { type: 'text/plain;charset=utf-8' }));
   $('download').href = downloadUrl; $('download').download = `${sourceName}-animated.txt`;
   $('download').setAttribute('aria-disabled', 'false'); $('download').tabIndex = 0;
-  status(`GIFの全${result.count}コマを変換できました。MFMをコピーしてお使いください。`, 'success');
+  status(result.fit && !result.fit.met ? '指定の文字数以内には収まりませんでした。上限を増やすか、サイズの縮小を許可してください。'
+    : `GIFの全${result.count}コマを変換できました。MFMをコピーしてお使いください。`, result.fit && !result.fit.met ? 'error' : 'success');
 }
 $('gif-restart').addEventListener('click', replayGif);
 window.addEventListener('resize', replayGif);

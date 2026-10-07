@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decodeGif } from '../web/gif.js';
+import { inspectGif } from '../web/load-warning.js';
 
 // Tiny independently encoded GIFs: reset the LZW dictionary before each literal.
 function fixture(frames, width = 2, height = 1) {
@@ -37,4 +38,13 @@ test('interlaced row ordering and truncated GIF rejection', () => {
   const bytes = fixture([{ indices: [1, 2] }]);
   assert.throws(() => decodeGif(bytes.slice(0, -2)));
   assert.throws(() => decodeGif(new ArrayBuffer(10)));
+});
+
+test('GIF inspection warns before decoding and accepts more than 256 frames', () => {
+  const bytes = fixture(Array.from({ length: 257 }, () => ({ indices: [1] })), 1, 1);
+  assert.equal(inspectGif(bytes).count, 257); assert.equal(decodeGif(bytes).frames.length, 257);
+  const large = fixture([{ indices: [1] }, { indices: [2] }], 1, 1);
+  const view = new DataView(large); view.setUint16(6, 6000, true); view.setUint16(8, 6000, true);
+  assert.equal(inspectGif(large).decodedBytes, 6000 * 6000 * 4 * 2);
+  assert.throws(() => inspectGif(bytes.slice(0, -1)));
 });

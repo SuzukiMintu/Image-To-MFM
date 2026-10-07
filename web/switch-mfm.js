@@ -42,10 +42,10 @@ export const frameHeightEm = rows => rows * (21.59375 / 16);
 
 // Equal-sized opaque frames on separate lines: reserve one frame's width.
 // MkMfm clamps positive scales to 5 but currently accepts negative scales.
-export function switchFrames(frames, { period = 6, widthEm = 1, heightEm = frameHeightEm(1), durations = null } = {}) {
-  if (!Array.isArray(frames) || frames.length < 2 || frames.length > 256
+export function switchFrames(frames, { period = 6, widthEm = 1, heightEm = frameHeightEm(1), durations = null, gateFirst = false } = {}) {
+  if (!Array.isArray(frames) || frames.length < 2
     || frames.some(frame => typeof frame !== 'string' || !frame)) {
-    throw new Error('同じ大きさのコマを2〜256個指定してください。');
+    throw new Error('同じ大きさのコマを2個以上指定してください。');
   }
   if (![period, widthEm, heightEm].every(Number.isFinite) || period < 0.02 || widthEm <= 0 || heightEm <= 0) {
     throw new Error('周期は0.02秒以上、幅と高さは正の数で指定してください。');
@@ -56,9 +56,9 @@ export function switchFrames(frames, { period = 6, widthEm = 1, heightEm = frame
   if (!Number.isFinite(total)) throw new Error('各コマの合計時間が不正です。');
   const wrap = (fn, content) => `$[${fn} ${content}]`;
   const sy = 625 * Math.max(1, widthEm / heightEm);
-  let start = times[0];
+  let start = gateFirst ? 0 : times[0];
   const layers = frames.map((frame, i) => {
-    if (!i) return frame;
+    if (!i && !gateFirst) return frame;
     const angle = Math.PI * times[i] / total;
     const radius = 100 * widthEm / Math.sin(angle);
     const offset = 312 * widthEm + radius * Math.cos(angle);
