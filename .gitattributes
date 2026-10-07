@@ -1,0 +1,2 @@
+# Git hooks must use LF even when Windows has core.autocrlf enabled.
+.githooks/* text eol=lf

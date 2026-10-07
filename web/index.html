@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7f4">
+  <title>Image to MFM — 画像を、ことばのピクセルに。</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header><a class="brand" href="./">◩ <span>Image to MFM</span></a><span class="tag">Misskeyのための画像変換ツール</span></header>
+  <main>
+    <section class="intro"><p class="eyebrow">IMAGE → MFM</p><h1>画像を、ことばの<br class="mobile-break">ピクセルに。</h1><p>好きな画像をMFMアートに変換。色やサイズを調整して、Misskeyに貼り付けよう。</p></section>
+    <div class="workspace">
+      <div class="controls">
+        <section class="card"><div class="section-title"><span class="step">01</span><h2>画像を選ぶ</h2></div>
+          <label class="dropzone" id="dropzone"><span class="upload-icon">↥</span><strong>画像をドロップ、または選択</strong><span>PNG・JPEG・WebP・GIFなど</span><input id="file" type="file" accept="image/*"></label>
+          <p class="help">画像の変換はブラウザー内で行います。GIFは全コマを切り替えるMFMにも変換できます。</p>
+          <p class="help"><a href="./mfm-switch.html">文字・複数画像の切り替えを試す ↗</a></p>
+          <button id="example-emoji" class="text-button" type="button">Misskey.ioの絵文字で試す ↗</button>
+          <button id="example-gif" class="text-button" type="button">GIF絵文字で試す ↗</button>
+          <p class="help">クリックすると、Misskey.ioから既存の絵文字を取得します。</p>
+          <details id="emoji-input" class="emoji-box"><summary>Misskeyの絵文字から読み込む</summary>
+            <label>サーバーのURL<input id="server-url" type="url" placeholder="https://misskey.example" autocomplete="url"></label>
+            <label>絵文字名<input id="emoji-name" type="text" placeholder="aichan または :aichan:" maxlength="102" autocomplete="off"></label>
+            <button id="fetch-emoji" class="secondary" type="button">絵文字を取得</button>
+            <p id="emoji-status" role="status" aria-live="polite"></p>
+            <p class="help">取得できないサーバーや画像もあります。その場合は画像を保存して、ファイルから読み込めます。</p>
+          </details>
+          <p id="source-name" class="source-name">画像が選択されていません</p>
+        </section>
+        <form id="settings" class="card">
+          <div class="section-title"><span class="step">02</span><h2>仕上がりを調整</h2></div>
+          <label>変換方法<select id="conversion-mode"><option value="static">静止画として変換</option><option id="gif-mode-option" value="gif" disabled>GIFの全コマを変換</option></select></label>
+          <label>縦方向のスケール<input name="scale" type="number" min="0.01" max="5" step="0.001" value="0.7" required></label>
+          <fieldset id="gif-settings" hidden disabled>
+            <div class="pair"><label>1コマの横幅 <span>px</span><input id="gif-width" type="number" min="1" max="24" value="16" required></label><label>縦幅 <span>px</span><input id="gif-height" type="number" min="1" max="24" value="16" required></label></div>
+            <label>1コマの色数<input id="gif-colors" type="number" min="1" max="32" value="8" required></label>
+            <label class="check"><input id="gif-timing" type="checkbox" checked>元のGIFの表示時間を使う</label>
+            <label>1周の時間 <span>秒</span><input id="gif-period" type="number" min="0.02" max="60" step="0.01" value="1" disabled required></label>
+            <p class="help">元の表示時間を使わない場合は、指定した1周の時間で全コマを均等に表示します。</p>
+            <p class="help">全フレームを白背景・3桁RGBで変換し、既存MFMだけで切り替えます。各辺24pxまでの小さいコマ用です。静止画用の文字数上限・最適化設定は適用しません。</p>
+          </fieldset>
+          <fieldset id="static-settings">
+          <div class="pair"><label>横幅 <span>px</span><input name="width" type="number" min="0" value="30" required></label><label>縦幅 <span>px</span><input name="height" type="number" min="0" value="0" required></label></div>
+          <p class="help">片方を0にすると縦横比を維持。両方0で元のサイズを使います。大きい画像は処理に時間がかかる場合があります。</p>
+          <label>文字数の上限<input name="targetLength" type="number" min="0" value="0" required></label>
+          <p class="help">0で自動調整しません。上限を指定すると、まず同じサイズで減色・最適化を試します。</p>
+          <label class="check"><input name="allowResize" type="checkbox" checked>収まらない場合は画像を小さくする</label>
+          <label>1行の色数<input name="colors" type="number" min="0" max="64" value="5" required></label><p class="help">少ないほどシンプルな色に。0で減色しません。</p>
+          <label>色の形式<select name="colorType"><option value="rgba4">4桁RGBA — 透明度を保持</option><option value="rgb6">6桁RGB — 色味を優先</option><option value="rgb3">3桁RGB — 短さを優先</option></select></label>
+          <div class="pair"><label>背景色<input name="background" type="color" value="#ffffff"></label><label>背景の不透明度<input name="backgroundAlpha" type="number" min="0" max="255" value="0" required></label></div><p class="help">不透明度: 0〜255。RGB形式では背景は不透明になります。</p>
+          <details><summary>詳細設定</summary>
+            <label>減色の範囲<select name="palette"><option value="row">行ごと</option><option value="global">画像全体</option></select></label>
+            <div class="pair"><label>横方向の平滑化<input name="smooth" type="number" min="0" max="5" value="0" required></label><label>減色の刻み幅<input name="division" type="number" min="1" max="255" step="0.1" value="1" required></label></div>
+            <label>似た色をまとめる閾値<input name="similar" type="number" min="0" max="255" value="0" required></label>
+            <label>色指定の入れ子上限<input name="depth" type="number" min="1" max="19" value="19" required></label>
+            <label>1ピクセルに使う文字<select name="cell"><option value="　">全角スペース</option><option value=" ">半角スペース</option><option value="█">█（ブロック）</option><option value="月">月</option></select></label>
+            <label>色を付ける対象<select name="mode"><option value="bg">bg — 背景</option><option value="fg">fg — 文字（ブロックなどを選択）</option></select></label>
+          </details>
+          <div class="optimization"><label class="check"><input name="optimize" type="checkbox" checked>色味を変えずにMFMを短くする</label><p class="help">色指定を再利用し、同じ色を短いコードで表します。減色による画質の変化とは別の設定です。</p></div>
+          <p class="help">文字数上限を指定した場合は、最適化を常に有効にして探索します。</p>
+          </fieldset>
+          <button id="convert" class="primary" type="submit" disabled>MFMに変換 <span>→</span></button>
+          <button id="cancel" class="secondary" type="button" hidden>処理を中止</button>
+        </form>
+      </div>
+      <div class="results">
+        <section class="card preview-card"><div class="section-title"><span class="step">03</span><h2>プレビュー</h2><span id="dimensions" class="pill">画像を選択してください</span></div>
+          <div class="preview-grid"><div><h3>元の画像</h3><div class="image-stage checker"><canvas id="original" hidden></canvas><img id="original-gif" alt="読み込んだGIF" hidden><span id="empty-original">ここに画像が表示されます</span></div></div><div><h3 id="processed-title">変換後の色</h3><div class="image-stage checker"><canvas id="processed" hidden></canvas><span id="empty-processed">変換すると表示されます</span></div></div></div>
+          <h3>MFMの表示イメージ</h3><div id="mfm-preview" class="mfm-preview checker"><span class="placeholder">MFMのプレビューが表示されます</span></div>
+          <button id="gif-restart" class="secondary" type="button" hidden>最初から再生</button>
+          <p id="gif-summary" class="help"></p><p id="gif-layout-warning" class="help" role="status"></p>
+          <details id="gif-frame-details" hidden><summary>各コマのMFMと色を確認</summary><div id="gif-frames"></div></details>
+          <p class="help">表示は目安です。Misskeyのフォント・テーマ・クライアント設定によって見え方が変わります。</p>
+        </section>
+        <section class="card output-card"><div class="section-title"><h2>生成されたMFM</h2><strong id="count">0 <small>文字</small></strong></div><p id="savings" class="help">変換結果をコピーして、Misskeyの投稿欄へ。</p><p id="fit-summary" class="help" aria-live="polite"></p>
+          <textarea id="output" readonly aria-label="生成されたMFM" placeholder="$[scale.y=0.7 …]"></textarea>
+          <div class="actions"><button id="copy" class="primary" type="button" disabled>コピーする</button><a id="download" class="secondary" aria-disabled="true" tabindex="-1">.txtで保存</a><a href="https://misskey-hub.net/ja/tools/mfm-playground/" target="_blank" rel="noopener noreferrer">MFMお試しコーナー ↗</a></div>
+          <a id="gif-export" class="help" download="mfm-gif-frames.json" hidden>各コマと表示時間を保存</a>
+        </section>
+      </div>
+    </div>
+    <p id="status" class="status" role="status" aria-live="polite">画像を選ぶところから始めましょう。</p>
+  </main>
+  <footer>Image to MFM <span>小さなピクセルで、もっと自由に。</span></footer>
+</body>
+</html>

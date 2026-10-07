@@ -1,0 +1,1 @@
+$[border.width=0 $[bg.color=26a $[fg.color=fff Ａ]]$[position.x=-1 $[position.x=312 $[spin.speed=4s $[position.x=100 $[spin.left,speed=4s $[scale.x=5,y=5 $[scale.x=5,y=5 $[scale.x=5,y=5 $[scale.x=5,y=5 $[border.width=0 $[scale.x=0.0016,y=0.0016 $[spin.speed=4s $[position.x=-100 $[spin.left,speed=4s $[position.x=-312 $[bg.color=e63 $[fg.color=fff Ｂ]]]]]]]]]]]]]]]]]]

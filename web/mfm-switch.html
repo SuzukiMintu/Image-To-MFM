@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MFMでコマを切り替える — 文字と画像の試作</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f7f4; color: #23312d; font: 16px/1.7 system-ui,sans-serif; }
+    main { max-width: 950px; padding: 36px 24px; margin: auto; }
+    h1 { font-size: clamp(24px,4vw,34px); line-height: 1.4; }
+    h2 { font-size: 21px; }
+    section { padding: 24px; margin: 24px 0; border: 1px solid #dbe3dc; border-radius: 16px; background: white; }
+    .preview { overflow: clip; min-height: 130px; max-width: 449px; padding: 20px; border: 1px solid #dbe3dc; border-radius: 12px; background: #eef2ef; }
+    #render { font: 16px/1.35 "Hiragino Maru Gothic Pro","BIZ UDGothic",Roboto,HelveticaNeue,Arial,sans-serif; white-space: pre-wrap; }
+    #render span { display: inline-block; }
+    label { display: block; margin: 14px 0; }
+    input,select { padding: 8px; font: inherit; border: 1px solid #ccd6ce; border-radius: 6px; }
+    input[type=number] { width: 85px; }
+    input[type=url] { width: 100%; }
+    input[type=file] { max-width: 100%; }
+    textarea { width: 100%; min-height: 110px; padding: 12px; font: 14px/1.6 monospace; border: 1px solid #ccd6ce; border-radius: 8px; }
+    #output { min-height: 180px; }
+    button { padding: 10px 16px; margin: 4px 0; border: 0; border-radius: 8px; background: #285744; color: white; font: inherit; cursor: pointer; }
+    button:disabled { opacity: .5; cursor: default; }
+    a { color: #285744; }
+    .note { color: #5c6b63; font-size: 14px; }
+    .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; }
+    #frames { display: flex; flex-wrap: wrap; gap: 12px; }
+    .frame { margin: 0; padding: 12px; border: 1px solid #dbe3dc; border-radius: 8px; width: 145px; max-width: 100%; }
+    .frame canvas { display: block; width: 80px; height: 80px; image-rendering: pixelated; object-fit: contain; }
+    .frame figcaption { font-size: 13px; overflow-wrap: anywhere; }
+    #status { overflow-wrap: anywhere; }
+    details { margin-top: 16px; }
+    #gif-original { width: 112px; height: 112px; object-fit: contain; }
+    @keyframes mfm-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @media(max-width:550px) { main { padding: 20px 12px; } section { padding: 16px; } }
+  </style>
+  <script type="module" src="./mfm-switch-preview.js"></script>
+</head>
+<body>
+  <main>
+    <a href="./">← 画像からMFMへの変換に戻る</a>
+    <h1>MFMだけで、文字と画像を切り替える。</h1>
+    <p>文字・複数の画像・GIFのフレームを順番に繰り返す試作です。再生には既存のMFMだけを使います。</p>
+    <section>
+      <h2>コマを用意する</h2>
+      <label>コマの種類 <select id="mode"><option value="text">文字</option><option value="image">画像</option></select></label>
+      <div id="text-controls">
+        <label>切り替える文字（1行につき1コマ）<textarea id="text-frames">こんにちは
+ありがとう
+またね</textarea></label>
+        <p class="note">英数字は全角に揃え、短いコマの末尾に空白を足して同じ幅にします。</p>
+      </div>
+      <div id="image-controls" hidden>
+        <label>画像をまとめて選ぶ（2〜8枚、またはGIF1枚）<input id="files" type="file" accept="image/*" multiple></label>
+        <p class="note">選択した順に再生します。GIFは全フレームを1コマずつ変換します。</p>
+        <button id="example" type="button">:petthex_meowsurprised: のGIFで試す</button>
+        <p class="note">Misskey.ioから指定の既存絵文字を取得します。画像は同梱していません。</p>
+        <details><summary>サーバーの絵文字を指定する</summary>
+          <label>サーバーのURL<input id="server" type="url" value="https://misskey.io"></label>
+          <label>絵文字名（1行につき1画像、GIFなら1行でも可）<textarea id="emoji-names" placeholder="petthex_meowsurprised"></textarea></label>
+          <button id="fetch" type="button">絵文字を読み込む</button>
+        </details>
+        <div class="row">
+          <label>変換する幅 <input id="width" type="number" min="1" max="24" value="5"> ピクセル</label>
+          <label>高さ <input id="height" type="number" min="1" max="24" value="5"> ピクセル</label>
+          <label>色数 <input id="colors" type="number" min="1" max="32" value="5"></label>
+        </div>
+        <p class="note">画像は同じ枠に収め、余白と透明部分を白くします。この試作は小さいコマでの動作確認用です。通常の画像変換にはサイズの固定上限はありません。</p>
+        <p id="sources" class="note">画像が選択されていません。</p>
+        <label><input id="gif-timing" type="checkbox" checked> GIF1枚の場合は、元のフレーム表示時間を使う</label>
+      </div>
+      <div class="row">
+        <label>1周の時間 <input id="period" type="number" min="0.5" max="60" step="0.5" value="6"> 秒</label>
+        <button id="generate" type="button">MFMを生成して再生</button>
+        <button id="cancel" type="button" hidden>中止</button>
+      </div>
+      <p id="status" role="status"></p>
+    </section>
+    <section>
+      <h2>切り替えのプレビュー</h2>
+      <figure id="original-wrap" hidden><img id="gif-original" alt="取得した元のGIF絵文字"><figcaption>元のGIF</figcaption></figure>
+      <div class="preview"><div id="render" aria-label="生成したMFMのコマ切り替え"></div></div>
+      <button id="restart" type="button">最初から再生</button>
+      <p id="layout-warning" role="status" class="note"></p>
+      <p id="timing"></p>
+      <p class="note">切り替えの瞬間には、ごく短いワイプや先頭コマの表示が残る場合があります。コマ自体を移動させず、切り抜き窓だけを動かしています。</p>
+      <h2>変換した各コマ</h2>
+      <div id="frames"></div>
+    </section>
+    <section>
+      <h2>Misskeyへ貼り付けるMFM</h2>
+      <p id="length"></p>
+      <textarea id="output" readonly aria-label="切り替えMFM"></textarea>
+      <button id="copy" type="button">MFMをコピー</button>
+      <a id="download" download="mfm-frames.txt">テキストを保存</a>
+      <a id="export-frames" download="mfm-frame-data.json">各コマと表示時間を保存</a>
+      <p><a href="https://misskey-hub.net/ja/tools/mfm-playground/" target="_blank" rel="noopener">公式のMFMお試しコーナーで確認 ↗</a></p>
+      <p class="note">動きのあるMFMを有効にしてお試しください。編集中に動きがずれた場合は、入力を空にしてから貼り直してください。各コマを別の行へ配置して重ねるため、横幅は1コマ分ですが、下にはコマ数分の余白が残ります。1コマ自体が表示欄より広い場合は、コマを小さくしてください。プレビューは16pxで表示し、自動縮小しません。</p>
+    </section>
+  </main>
+</body>
+</html>
